@@ -2251,136 +2251,7 @@ BedSkewOffsetDetectionResultType find_bed_offset_and_skew(int8_t verbosity_level
 			*/
 			if (2 == k) // RLE: basterd reached
 			{
-				const float RLE_alt_ref_points[2*2] = {
-					216.f - BED_ZERO_REF_X, 202.4f - BED_ZERO_REF_Y, // RLE: top right
-					 13.f - BED_ZERO_REF_X, 202.4f - BED_ZERO_REF_Y  // RLE: top left
-				};
-				float RLE_alt_measured_point[2];
-				for (int ap = 0; ap < 2; ++ap) // RLE: measure alternative points
-				{
-					// Go up to z_initial.
-					go_to_current(homing_feedrate[Z_AXIS] / 60.f);
-					#ifdef SUPPORT_VERBOSITY
-					if (verbosity_level >= 20) {
-						// Go to Y0, wait, then go to Y-4.
-						current_position[Y_AXIS] = 0.f;
-						go_to_current(homing_feedrate[X_AXIS] / 60.f);
-						SERIAL_ECHOLNPGM("At Y0");
-						delay_keep_alive(5000);
-						current_position[Y_AXIS] = Y_MIN_POS;
-						go_to_current(homing_feedrate[X_AXIS] / 60.f);
-						SERIAL_ECHOLNPGM("At Y-4");
-						delay_keep_alive(5000);
-					}
-					#endif // SUPPORT_VERBOSITY
-					// Go to the measurement point position.
-					//if (iteration == 0) {
-						current_position[X_AXIS] = RLE_alt_ref_points[ap * 2];
-						current_position[Y_AXIS] = RLE_alt_ref_points[ap * 2 + 1];
-					/*}
-					else {
-						// if first iteration failed, count corrected point coordinates as initial
-						// Use the coorrected coordinate, which is a result of find_bed_offset_and_skew().
-						
-						current_position[X_AXIS] = vec_x[0] * pgm_read_float(bed_ref_points_4 + k * 2) + vec_y[0] * pgm_read_float(bed_ref_points_4 + k * 2 + 1) + cntr[0];
-						current_position[Y_AXIS] = vec_x[1] * pgm_read_float(bed_ref_points_4 + k * 2) + vec_y[1] * pgm_read_float(bed_ref_points_4 + k * 2 + 1) + cntr[1];
-
-						// The calibration points are very close to the min Y.
-						if (current_position[Y_AXIS] < Y_MIN_POS_FOR_BED_CALIBRATION)
-							current_position[Y_AXIS] = Y_MIN_POS_FOR_BED_CALIBRATION;
-
-					}*/
-					#ifdef SUPPORT_VERBOSITY
-					if (verbosity_level >= 20) {
-						SERIAL_ECHOPGM("current_position[X_AXIS]:");
-						MYSERIAL.print(current_position[X_AXIS], 5);
-						SERIAL_ECHOLNPGM("");
-						SERIAL_ECHOPGM("current_position[Y_AXIS]:");
-						MYSERIAL.print(current_position[Y_AXIS], 5);
-						SERIAL_ECHOLNPGM("");
-						SERIAL_ECHOPGM("current_position[Z_AXIS]:");
-						MYSERIAL.print(current_position[Z_AXIS], 5);
-						SERIAL_ECHOLNPGM("");
-					}
-					#endif // SUPPORT_VERBOSITY
-
-					go_to_current(homing_feedrate[X_AXIS] / 60.f);
-					#ifdef SUPPORT_VERBOSITY
-					if (verbosity_level >= 10)
-						delay_keep_alive(3000);
-					#endif // SUPPORT_VERBOSITY
-					if (!find_bed_induction_sensor_point_xy(verbosity_level))
-						return BED_SKEW_OFFSET_DETECTION_POINT_NOT_FOUND;
-
-#ifndef NEW_XYZCAL
-#ifndef HEATBED_V2
-					if (k == 0 || k == 1) {
-						// Improve the position of the 1st row sensor points by a zig-zag movement.
-						find_bed_induction_sensor_point_z();
-						int8_t i = 4;
-						for (;;) {
-							if (improve_bed_induction_sensor_point3(verbosity_level))
-								break;
-							if (--i == 0)
-								return BED_SKEW_OFFSET_DETECTION_POINT_NOT_FOUND;
-							// Try to move the Z axis down a bit to increase a chance of the sensor to trigger.
-							current_position[Z_AXIS] -= 0.025f;
-							enable_endstops(false);
-							enable_z_endstop(false);
-							go_to_current(homing_feedrate[Z_AXIS]);
-						}
-						if (i == 0)
-							// not found
-							return BED_SKEW_OFFSET_DETECTION_POINT_NOT_FOUND;
-					}
-#endif //HEATBED_V2
-#endif
-					#ifdef SUPPORT_VERBOSITY
-					if (verbosity_level >= 10)
-						delay_keep_alive(3000);
-					#endif // SUPPORT_VERBOSITY
-					// Save the detected point position and then clamp the Y coordinate, which may have been estimated
-					// to lie outside the machine working space.
-					#ifdef SUPPORT_VERBOSITY
-					if (verbosity_level >= 20) {
-						SERIAL_ECHOLNPGM("Measured:");
-						MYSERIAL.println(current_position[X_AXIS]);
-						MYSERIAL.println(current_position[Y_AXIS]);
-					}
-					#endif // SUPPORT_VERBOSITY
-
-					// RLE: contribute to the average position of basterd
-					RLE_alt_measured_point[0] = currentPosition[X_AXIS] * 0.5;
-					RLE_alt_measured_point[1] = currentPosition[Y_AXIS] * 0.5;
-
-					if (current_position[Y_AXIS] < Y_MIN_POS)
-						current_position[Y_AXIS] = Y_MIN_POS;
-					// Start searching for the other points at 3mm above the last point.
-					current_position[Z_AXIS] += 3.f + FIND_BED_INDUCTION_SENSOR_POINT_Z_STEP * iteration * 0.3;
-					//cntr[0] += pt[0];
-					//cntr[1] += pt[1];
-				} // RLE: end of measuring alternative points
-
-				pt[0] = (pt[0] * iteration) / (iteration + 1);
-				pt[0] += (RLE_alt_measured_point[0]/(iteration + 1)); //count average
-				pt[1] = (pt[1] * iteration) / (iteration + 1);
-				pt[1] += (RLE_alt_measured_point[1] / (iteration + 1));
-				
-				//pt[0] += current_position[X_AXIS];
-				//if(iteration > 0) pt[0] = pt[0] / 2;
-				
-				//pt[1] += current_position[Y_AXIS];
-				//if (iteration > 0) pt[1] = pt[1] / 2;
-
-				#ifdef SUPPORT_VERBOSITY
-				if (verbosity_level >= 20) {
-					SERIAL_ECHOLNPGM("");
-					SERIAL_ECHOPGM("pt[0]:");
-					MYSERIAL.println(pt[0]);
-					SERIAL_ECHOPGM("pt[1]:");
-					MYSERIAL.println(pt[1]);
-				}
-				#endif // SUPPORT_VERBOSITY
+				continue;
 			}
 			else // proceed as usual
 			{
@@ -2503,6 +2374,20 @@ BedSkewOffsetDetectionResultType find_bed_offset_and_skew(int8_t verbosity_level
 				//cntr[0] += pt[0];
 				//cntr[1] += pt[1];
 			} // RLE: end of basterd handling
+
+            if (3 == k)
+            {
+                float RLE_vec[2] = {
+                    pts[1*2]     - pts[3*2],
+                    pts[1*2 + 1] - pts[3*2 + 1]
+                };
+                float norm = sqrt(RLE_vec[0]*RLE_vec[0] + RLE_vec[1]*RLE_vec[1]);
+                RLE_vec[0] /= norm;
+                RLE_vec[1] /= norm;
+                float ref_dist = bed_ref_points_4[2*2 + 1] - bed_ref_points_4[0*2 + 1];
+                pts[2*2]     = pts[0*2]     - RLE_vec[1] * ref_dist;
+                pts[2*2 + 1] = pts[0*2 + 1] + RLE_vec[0] * ref_dist;
+            }
 
 			#ifdef SUPPORT_VERBOSITY
 			if (verbosity_level >= 10 && k == 0) {
@@ -2651,6 +2536,10 @@ BedSkewOffsetDetectionResultType improve_bed_offset_and_skew(int8_t method, int8
     for (int8_t mesh_point = 0; mesh_point < 4; ++ mesh_point) {
         // Don't let the manage_inactivity() function remove power from the motors.
         refresh_cmd_timeout();
+        if (2 == mesh_point)
+        {
+            continue;
+        }
         // Print the decrasing ID of the measurement point.
 #ifdef MESH_BED_CALIBRATION_SHOW_LCD
         lcd_set_cursor(0, next_line);
@@ -2765,10 +2654,24 @@ BedSkewOffsetDetectionResultType improve_bed_offset_and_skew(int8_t method, int8
 				#endif // SUPPORT_VERBOSITY
             }
         }
-		#ifdef SUPPORT_VERBOSITY
+        #ifdef SUPPORT_VERBOSITY
         if (verbosity_level >= 10)
             delay_keep_alive(3000);
-		#endif // SUPPORT_VERBOSITY
+        #endif // SUPPORT_VERBOSITY
+
+        if (3 == mesh_point)
+        {
+            float RLE_vec[2] = {
+                pts[1*2]     - pts[3*2],
+                pts[1*2 + 1] - pts[3*2 + 1]
+            };
+            float norm = sqrt(RLE_vec[0]*RLE_vec[0] + RLE_vec[1]*RLE_vec[1]);
+            RLE_vec[0] /= norm;
+            RLE_vec[1] /= norm;
+            float ref_dist = bed_ref_points_4[2*2 + 1] - bed_ref_points_4[0*2 + 1];
+            pts[2*2]     = pts[0*2]     - RLE_vec[1] * ref_dist;
+            pts[2*2 + 1] = pts[0*2 + 1] + RLE_vec[0] * ref_dist;
+        }
     }
     // Don't let the manage_inactivity() function remove power from the motors.
     refresh_cmd_timeout();
