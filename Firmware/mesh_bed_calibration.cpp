@@ -2852,34 +2852,59 @@ bool sample_mesh_and_store_reference()
 		}
         mbl.set_z(0, 0, current_position[Z_AXIS]);
     }
-    for (int8_t mesh_point = 1; mesh_point != MESH_MEAS_NUM_X_POINTS * MESH_MEAS_NUM_Y_POINTS; ++ mesh_point) {
-        // Don't let the manage_inactivity() function remove power from the motors.
-        refresh_cmd_timeout();
-        // Print the decrasing ID of the measurement point.
-        current_position[Z_AXIS] = MESH_HOME_Z_SEARCH;
-        go_to_current(homing_feedrate[Z_AXIS]/60);
-		int8_t ix = mesh_point % MESH_MEAS_NUM_X_POINTS;
-		int8_t iy = mesh_point / MESH_MEAS_NUM_X_POINTS;
-		if (iy & 1) ix = (MESH_MEAS_NUM_X_POINTS - 1) - ix; // Zig zag
-		current_position[X_AXIS] = BED_X(ix, MESH_MEAS_NUM_X_POINTS);
-		current_position[Y_AXIS] = BED_Y(iy, MESH_MEAS_NUM_Y_POINTS);
-        world2machine_clamp(current_position[X_AXIS], current_position[Y_AXIS]);
-        go_to_current(homing_feedrate[X_AXIS]/60);
+
+    /*
+    RLE: My heatbed has a problematic mesh point, presumably #8 (2,3).
+    I therefore skip this point and instead interpolate its Z position from
+    points #7 (1,3) and #9 (3,3).
+    */
+    { // RLE: scope to delimit my variables
+        int8_t RLE_basterd[2];
+        float  RLE_z7, RLE_z9;
+        for (int8_t mesh_point = 1; mesh_point != MESH_MEAS_NUM_X_POINTS * MESH_MEAS_NUM_Y_POINTS; ++ mesh_point) {
+            // Don't let the manage_inactivity() function remove power from the motors.
+            refresh_cmd_timeout();
+            // Print the decrasing ID of the measurement point.
+            current_position[Z_AXIS] = MESH_HOME_Z_SEARCH;
+            go_to_current(homing_feedrate[Z_AXIS]/60);
+    		int8_t ix = mesh_point % MESH_MEAS_NUM_X_POINTS;
+    		int8_t iy = mesh_point / MESH_MEAS_NUM_X_POINTS;
+            if (8 == mesh_point) // RLE: reached that basterd, store its position and skip it
+            {
+                RLE_basterd[0] = ix;
+                RLE_basterd[1] = iy;
+                continue;
+            }
+    		if (iy & 1) ix = (MESH_MEAS_NUM_X_POINTS - 1) - ix; // Zig zag
+    		current_position[X_AXIS] = BED_X(ix, MESH_MEAS_NUM_X_POINTS);
+    		current_position[Y_AXIS] = BED_Y(iy, MESH_MEAS_NUM_Y_POINTS);
+            world2machine_clamp(current_position[X_AXIS], current_position[Y_AXIS]);
+            go_to_current(homing_feedrate[X_AXIS]/60);
 #ifdef MESH_BED_CALIBRATION_SHOW_LCD
-        // display "point xx of yy"
-		lcd_set_cursor(0, next_line);
-        lcd_print(mesh_point+1);
-        lcd_puts_P(_T(MSG_MEASURE_BED_REFERENCE_HEIGHT_LINE2));
+            // display "point xx of yy"
+    		lcd_set_cursor(0, next_line);
+            lcd_print(mesh_point+1);
+            lcd_puts_P(_T(MSG_MEASURE_BED_REFERENCE_HEIGHT_LINE2));
 #endif /* MESH_BED_CALIBRATION_SHOW_LCD */
-		if (!find_bed_induction_sensor_point_z()) //Z crash or deviation > 50um
-		{
-			kill(_T(MSG_BED_LEVELING_FAILED_POINT_LOW));
-			return false;
-		}
-        // Get cords of measuring point
-       
-        mbl.set_z(ix, iy, current_position[Z_AXIS]);
-    }
+    		if (!find_bed_induction_sensor_point_z()) //Z crash or deviation > 50um
+    		{
+    			kill(_T(MSG_BED_LEVELING_FAILED_POINT_LOW));
+    			return false;
+    		}
+            // Get cords of measuring point
+
+            if (7 == mesh_point) // RLE: store Z position of point #7
+                { RLE_z7 = current_position[Z_AXIS]; }
+            if (9 == mesh_point) // RLE: store Z position of point #9
+                { RLE_z9 = current_position[Z_AXIS]; }
+
+            mbl.set_z(ix, iy, current_position[Z_AXIS]);
+        }
+        // RLE: all points visited, let's add the entry for point #8
+        float RLE_basterd_z = (RLE_z7 + RLE_z9) * 0.5;
+        mbl.set_z(RLE_basterd[0], RLE_basterd[1], RLE_basterd_z);
+    } // RLE: end of the scope delimiting my variables
+
     {
         // Verify the span of the Z values.
         float zmin = mbl.z_values[0][0];

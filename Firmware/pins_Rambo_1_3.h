@@ -102,8 +102,8 @@
 #define LCD_PINS_D7         71
 
 //buttons are directly attached using AUX-2
-#define BTN_EN1                72
-#define BTN_EN2                14
+#define BTN_EN1                14  // swapped to work properly with
+#define BTN_EN2                72  // my display replacement
 #define BTN_ENC                 9  // the click
 
 #define SDCARDDETECT           15
