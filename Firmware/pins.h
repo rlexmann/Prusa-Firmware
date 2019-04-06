@@ -91,8 +91,8 @@
   
     #define BEEPER 84
 
-        #define BTN_EN1 72
-        #define BTN_EN2 14
+        #define BTN_EN1 14
+        #define BTN_EN2 72  // RLE: pins swapped on my chinese replacement
         #define BTN_ENC 9
 
         #define SDCARDDETECT 15
